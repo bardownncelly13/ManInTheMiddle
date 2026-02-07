@@ -1,14 +1,31 @@
 #!/usr/bin/env python3
-"""Starter template for the port knocking server."""
+"""Port knocking server."""
 
 import argparse
 import logging
 import socket
 import time
+import subprocess
+import threading
 
 DEFAULT_KNOCK_SEQUENCE = [1234, 5678, 9012]
-DEFAULT_PROTECTED_PORT = 2222
+DEFAULT_PROTECTED_PORT = 9000
 DEFAULT_SEQUENCE_WINDOW = 10.0
+OPEN_DURATION = 30
+def setup_firewall(protected_port):
+    subprocess.run([
+        "iptables", "-A", "INPUT",
+        "-m", "conntrack",
+        "--ctstate", "ESTABLISHED,RELATED",
+        "-j", "ACCEPT"
+    ], check=False)
+
+    subprocess.run([
+        "iptables", "-A", "INPUT",
+        "-p", "tcp",
+        "--dport", str(protected_port),
+        "-j", "DROP"
+    ], check=True)
 
 
 def setup_logging():
@@ -19,52 +36,104 @@ def setup_logging():
     )
 
 
-def open_protected_port(protected_port):
-    """Open the protected port using firewall rules."""
-    # TODO: Use iptables/nftables to allow access to protected_port.
-    logging.info("TODO: Open firewall for port %s", protected_port)
+def open_protected_port(ip, protected_port):
+    try:
+        subprocess.run(
+            ["iptables", "-I", "INPUT", "-p", "tcp",
+             "--dport", str(protected_port),
+             "-s", ip, "-j", "ACCEPT"],
+            check=True
+        )
+        logging.info(f"Opened port {protected_port} for {ip}")
+    except Exception as e:
+        logging.error(f"Failed to open port: {e}")
 
 
-def close_protected_port(protected_port):
-    """Close the protected port using firewall rules."""
-    # TODO: Remove firewall rules for protected_port.
-    logging.info("TODO: Close firewall for port %s", protected_port)
+def close_protected_port(ip, protected_port):
+    try:
+        subprocess.run(
+            ["iptables", "-D", "INPUT", "-p", "tcp",
+             "--dport", str(protected_port),
+             "-s", ip, "-j", "ACCEPT"],
+            check=True
+        )
+        logging.info(f"Closed port {protected_port} for {ip}")
+    except Exception as e:
+        logging.error(f"Failed to close port: {e}")
 
 
 def listen_for_knocks(sequence, window_seconds, protected_port):
-    """Listen for knock sequence and open the protected port."""
     logger = logging.getLogger("KnockServer")
-    logger.info("Listening for knocks: %s", sequence)
-    logger.info("Protected port: %s", protected_port)
+    logger.info(f"Listening for knocks: {sequence}")
+    logger.info(f"Protected port: {protected_port}")
 
-    # TODO: Create UDP or TCP listeners for each knock port.
-    # TODO: Track each source IP and its progress through the sequence.
-    # TODO: Enforce timing window per sequence.
-    # TODO: On correct sequence, call open_protected_port().
-    # TODO: On incorrect sequence, reset progress.
+    sockets = []
+    for port in set(sequence):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(('', port))
+        sock.setblocking(False)
+        sockets.append(sock)
+
+    ip_states = {}  # ip -> (step, last_time)
 
     while True:
-        time.sleep(1)
+        now = time.time()
+
+        for s in sockets:
+            try:
+                data, addr = s.recvfrom(1024)
+                ip = addr[0]
+                port = s.getsockname()[1]
+
+                # Reset if timeout exceeded
+                if ip in ip_states:
+                    step, last_time = ip_states[ip]
+                    if now - last_time > window_seconds:
+                        ip_states.pop(ip)
+                        step = 0
+                else:
+                    step = 0
+
+                expected_port = sequence[step]
+
+                if port == expected_port:
+                    step += 1
+                    ip_states[ip] = (step, now)
+
+                    if step == len(sequence):
+                        logger.info(f"Valid sequence from {ip}")
+                        open_protected_port(ip, protected_port)
+                        ip_states.pop(ip, None)
+
+                        threading.Timer(
+                            OPEN_DURATION,
+                            close_protected_port,
+                            args=(ip, protected_port)
+                        ).start()
+                else:
+                    ip_states.pop(ip, None)
+
+            except BlockingIOError:
+                pass
+
+        time.sleep(0.05)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Port knocking server starter")
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "--sequence",
-        default=",".join(str(port) for port in DEFAULT_KNOCK_SEQUENCE),
-        help="Comma-separated knock ports",
+        default=",".join(str(p) for p in DEFAULT_KNOCK_SEQUENCE),
     )
     parser.add_argument(
         "--protected-port",
         type=int,
         default=DEFAULT_PROTECTED_PORT,
-        help="Protected service port",
     )
     parser.add_argument(
         "--window",
         type=float,
         default=DEFAULT_SEQUENCE_WINDOW,
-        help="Seconds allowed to complete the sequence",
     )
     return parser.parse_args()
 
@@ -74,10 +143,10 @@ def main():
     setup_logging()
 
     try:
-        sequence = [int(port) for port in args.sequence.split(",")]
+        sequence = [int(p) for p in args.sequence.split(",")]
     except ValueError:
-        raise SystemExit("Invalid sequence. Use comma-separated integers.")
-
+        raise SystemExit("Invalid sequence format.")
+    setup_firewall(args.protected_port)
     listen_for_knocks(sequence, args.window, args.protected_port)
 
 

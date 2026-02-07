@@ -7,5 +7,5 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY knock_server.py knock_client.py ./
+CMD sh -c "python3 -m http.server 9000 & python3 knock_server.py"
 
-CMD ["python3", "knock_server.py"]

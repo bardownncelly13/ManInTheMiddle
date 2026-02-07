@@ -16,92 +16,113 @@ TODO for students:
 7. Add progress indicators
 8. Add service fingerprinting
 """
-
 import socket
-import sys
-
+import argparse
+import time
+from datetime import datetime
+import concurrent.futures
+import ipaddress
 
 def scan_port(target, port, timeout=1.0):
     """
     Scan a single port on the target host
-
-    Args:
-        target (str): IP address or hostname to scan
-        port (int): Port number to scan
-        timeout (float): Connection timeout in seconds
-
-    Returns:
-        bool: True if port is open, False otherwise
+    Returns: (state, banner, elapsed)
     """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    banner = None
+    start = time.time()
     try:
-        # TODO: Create a socket
-        # TODO: Set timeout
-        # TODO: Try to connect to target:port
-        # TODO: Close the socket
-        # TODO: Return True if connection successful
+        s.connect((target, port))
+        state = 'open'
+        try:
+            s.sendall(b'\r\n')
+            banner = s.recv(128)
+            if banner:
+                banner = banner.decode(errors='replace').strip()
+        except Exception:
+            banner = None
+    except (ConnectionRefusedError, OSError):
+        state = 'closed'
+    except socket.timeout:
+        state = 'filtered'
+    finally:
+        s.close()
+    elapsed = time.time() - start
+    return state, banner, elapsed
 
-        pass  # Remove this and implement
+def parse_ports(port_str):
+    """Parse port arguments like '80,443,1000-1010' into list of ints"""
+    result = set()
+    for part in port_str.split(','):
+        if '-' in part:
+            a, b = part.split('-')
+            for p in range(int(a), int(b)+1):
+                result.add(p)
+        else:
+            result.add(int(part))
+    return sorted(list(result))
 
-    except (socket.timeout, ConnectionRefusedError, OSError):
-        return False
-
-
-def scan_range(target, start_port, end_port):
-    """
-    Scan a range of ports on the target host
-
-    Args:
-        target (str): IP address or hostname to scan
-        start_port (int): Starting port number
-        end_port (int): Ending port number
-
-    Returns:
-        list: List of open ports
-    """
-    open_ports = []
-
-    print(f"[*] Scanning {target} from port {start_port} to {end_port}")
-    print(f"[*] This may take a while...")
-
-    # TODO: Implement the scanning logic
-    # Hint: Loop through port range and call scan_port()
-    # Hint: Consider using threading for better performance
-
-    for port in range(start_port, end_port + 1):
-        # TODO: Scan this port
-        # TODO: If open, add to open_ports list
-        # TODO: Print progress (optional)
-        pass  # Remove this and implement
-
-    return open_ports
-
+def scan_range(target, ports, timeout=1.0, max_workers=100):
+    results = []
+    print(f"[*] Scanning {target} from port {ports[0]} to {ports[-1]} using {max_workers} threads")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_port = {executor.submit(scan_port, target, port, timeout): port for port in ports}
+        for future in concurrent.futures.as_completed(future_to_port):
+            port = future_to_port[future]
+            try:
+                state, banner, elapsed = future.result()
+            except Exception as exc:
+                state, banner, elapsed = 'error', None, 0
+            results.append({'port': port, 'state': state, 'banner': banner, 'time': elapsed})
+    return results
 
 def main():
-    """Main function"""
-    # TODO: Parse command-line arguments
-    # TODO: Validate inputs
-    # TODO: Call scan_range()
-    # TODO: Display results
+    parser = argparse.ArgumentParser(description="Basic Port Scanner")
+    parser.add_argument("--target", required=True, help="Target IP address, hostname, or subnet")
+    parser.add_argument("--ports", default="1-10000", help="Port(s) to scan, e.g., 1-1000 or 22,80,443")
+    parser.add_argument("--timeout", type=float, default=.2, help="Connection timeout (sec)")
+    parser.add_argument("--threads", type=int, default=100, help="Number of concurrent scan threads")
+    args = parser.parse_args()
 
-    # Example usage (you should improve this):
-    if len(sys.argv) < 2:
-        print("Usage: python3 port_scanner_template.py <target>")
-        print("Example: python3 port_scanner_template.py 172.20.0.10")
-        sys.exit(1)
+    targets = []
+    if "/" in args.target:
+        try:
+            net = ipaddress.ip_network(args.target, strict=False)
+            targets = [str(h) for h in net.hosts()]
+        except Exception as e:
+            print(f"[-] Invalid subnet: {args.target} ({e})")
+            return
+    else:
+        try:
+            socket.gethostbyname(args.target)
+            targets = [args.target]
+        except socket.gaierror:
+            print(f"[-] Invalid target: {args.target}")
+            return
 
-    target = sys.argv[1]
-    start_port = 1
-    end_port = 1024  # Scan first 1024 ports by default
+    ports = parse_ports(args.ports)
+    all_open = []
 
-    print(f"[*] Starting port scan on {target}")
+    for tgt in targets:
+        print(f"[*] Starting scan of {tgt} at {datetime.now()}")
+        results = scan_range(tgt, ports, timeout=args.timeout, max_workers=args.threads)
+        print(f"\n[+] SUMMARY for {tgt}:")
+        for r in results:
+            if r['state'] == 'open':
+                print(f"Port {r['port']:5} OPEN   Banner: {r['banner']}")
+                all_open.append({'host': tgt, 'port': r['port'], 'banner': r['banner']})
+        print(f"Done at {datetime.now()}")
 
-    open_ports = scan_range(target, start_port, end_port)
-
-    print(f"\n[+] Scan complete!")
-    print(f"[+] Found {len(open_ports)} open ports:")
-    for port in open_ports:
-        print(f"    Port {port}: open")
-
+    print("\n" + "="*60)
+    print("      FINAL CONDENSED SUMMARY OF ALL OPEN PORTS")
+    print("="*60)
+    if all_open:
+        for entry in all_open:
+            print(f"{entry['host']:15}  Port {entry['port']:5}  Banner: {entry['banner']}")
+    else:
+        print("No open ports found on any scanned hosts.")
+    print("="*60)
 
 if __name__ == "__main__":
     main()

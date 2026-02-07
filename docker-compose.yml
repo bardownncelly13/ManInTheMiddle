@@ -111,6 +111,8 @@ services:
       - 1.1.1.1
     cap_add:
       - NET_ADMIN
+    ports:
+     - "9000:9000"
     networks:
       vulnerable_network:
         ipv4_address: 172.20.0.40
